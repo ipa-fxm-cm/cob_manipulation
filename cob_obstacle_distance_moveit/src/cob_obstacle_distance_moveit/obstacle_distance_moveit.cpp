@@ -1,11 +1,16 @@
 #include <cob_obstacle_distance_moveit/obstacle_distance_moveit.h>
+#include <cob_obstacle_distance/distance_manager.hpp>
+#include <thread>
+
+#define MIN_DISTANCE_THRESHOLD 0.3
 
 class CreateCollisionWorld : public collision_detection::CollisionWorldFCL
 {
 public:
     CreateCollisionWorld(const collision_detection::WorldPtr &world) :
             CollisionWorldFCL(world)
-    {}
+    {
+    }
 
     void getCollisionObject(std::vector<boost::shared_ptr<fcl::CollisionObject> > &obj)
     {
@@ -123,7 +128,10 @@ void ObstacleDistanceMoveit::calculateDistanceTimerCallback(const ros::TimerEven
     collision_detection::AllowedCollisionMatrix acm = planning_scene_ptr->getAllowedCollisionMatrix();
     std::string planning_frame = planning_scene_ptr->getPlanningFrame();
 
+
+
     std::set<std::string>::iterator link_it;
+
     for (link_it = registered_links_.begin(); link_it!=registered_links_.end(); ++link_it)
     {
         std::string robot_link_name = *link_it;
@@ -156,13 +164,18 @@ void ObstacleDistanceMoveit::calculateDistanceTimerCallback(const ros::TimerEven
             cob_control_msgs::ObstacleDistance info;
             info = getDistanceInfo(robot_object, collision_object);
 
-            info.header.frame_id = planning_frame;
-            info.header.stamp = event.current_real;
-            info.link_of_interest = robot_link_name;
-            info.obstacle_id = collision_object_name;
+            if(info.distance < MIN_DISTANCE_THRESHOLD)
+            {
+                info.header.frame_id = planning_frame;
+                info.header.stamp = event.current_real;
+                info.link_of_interest = robot_link_name;
+                info.obstacle_id = collision_object_name;
 
-            distance_infos.distances.push_back(info);
+                distance_infos.distances.push_back(info);
+            }
         }
+
+//        acm.print(std::cout);
 
         std::map<std::string, boost::shared_ptr<fcl::CollisionObject> >::iterator selfcollision_it;
         for (selfcollision_it = robot_links.begin(); selfcollision_it != robot_links.end(); ++selfcollision_it)
@@ -179,12 +192,17 @@ void ObstacleDistanceMoveit::calculateDistanceTimerCallback(const ros::TimerEven
                     cob_control_msgs::ObstacleDistance info;
                     info = getDistanceInfo(robot_object, robot_self_object);
 
-                    info.header.frame_id = planning_frame;
-                    info.header.stamp = event.current_real;
-                    info.link_of_interest = robot_link_name;
-                    info.obstacle_id = robot_self_name;
+                    if(info.distance < MIN_DISTANCE_THRESHOLD)
+                    {
+                        info.header.frame_id = planning_frame;
+                        info.header.stamp = event.current_real;
+                        info.link_of_interest = robot_link_name;
+                        info.obstacle_id = robot_self_name;
 
-                    distance_infos.distances.push_back(info);
+                        ROS_WARN_STREAM("RL: " << robot_link_name << "  SCO: " << robot_self_name);
+
+                        distance_infos.distances.push_back(info);
+                    }
                 }
                 else
                 {
@@ -192,8 +210,10 @@ void ObstacleDistanceMoveit::calculateDistanceTimerCallback(const ros::TimerEven
                 }
             }
         }
+
     }
     distance_pub_.publish(distance_infos);
+    ROS_WARN("-------------------------------------------------------------------------------------");
 }
 
 void ObstacleDistanceMoveit::planningSceneTimerCallback(const ros::TimerEvent& event)
@@ -336,8 +356,9 @@ cob_control_msgs::ObstacleDistance ObstacleDistanceMoveit::getDistanceInfo(const
     cob_control_msgs::ObstacleDistance info;
     info.distance = dist;
 
+//    tf::vectorEigenToMsg(np_object_a, info.frame_vector); // Test
     tf::vectorEigenToMsg(np_object_a, info.nearest_point_frame_vector);
-    tf::vectorEigenToMsg(np_object_b, info.nearest_point_obstacle_vector);    
+    tf::vectorEigenToMsg(np_object_b, info.nearest_point_obstacle_vector);
     ROS_DEBUG_STREAM("NearestPointTransformed OBJ_A: \n" << info.nearest_point_frame_vector);
     ROS_DEBUG_STREAM("NearestPointTransformed OBJ_B: \n" << info.nearest_point_obstacle_vector);
 
@@ -379,4 +400,5 @@ ObstacleDistanceMoveit::ObstacleDistanceMoveit()
     monitored_scene_pub_ = nh_.advertise<moveit_msgs::PlanningScene>("/monitored_planning_scene", 1);
     monitored_scene_server_ = nh_.advertiseService("/get_planning_scene", &ObstacleDistanceMoveit::planningSceneCallback, this);
     planning_scene_timer_ = nh_.createTimer(ros::Duration(1.0/update_frequency), &ObstacleDistanceMoveit::planningSceneTimerCallback, this);
+
 }

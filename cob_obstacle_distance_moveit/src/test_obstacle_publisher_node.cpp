@@ -27,9 +27,9 @@ int main(int argc, char** argv)
   sphere.dimensions.push_back(0.1);
 
   geometry_msgs::Pose pose;
-  pose.position.x = 1.0;
-  pose.position.y = 0.0;
-  pose.position.z = 0.0;
+  pose.position.x = 0.5;
+  pose.position.y = 0.3;
+  pose.position.z = 1.0;
   pose.orientation.w = 1.0;
 
   col_sphere_msg.primitives.push_back(sphere);
@@ -72,8 +72,8 @@ int main(int argc, char** argv)
   box.dimensions.push_back(0.1);
   box.dimensions.push_back(0.1);
 
-  pose.position.x = 1.0;
-  pose.position.y = 0.0;
+  pose.position.x = 0.5;
+  pose.position.y = 0.3;
   pose.position.z = 1.0;
   pose.orientation.w = 1.0;
 
